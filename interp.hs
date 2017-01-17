@@ -9,53 +9,59 @@ data Term = Var Name
           | Lam Name Term
           | App Term Term
 
-data Value = Wrong
-           | Num Int
-           | Fun (Value -> M Value)
+data Value = Num Int
+           | Fun (Value -> E Value)
 
 type Environment = [(Name, Value)]
 
-data M a = M a
+data E a = Success a | Error String
 
-unitM :: a -> M a
-unitM = M 
+unitE :: a -> E a
+unitE = Success 
 
-bindM :: M a -> (a -> M b) -> M b
-bindM (M x) f = f x
+errorE :: String -> E a
+errorE = Error 
 
-showM :: M Value -> String
-showM (M x) = showval x
+bindE :: E a -> (a -> E b) -> E b
+(Success a) `bindE` k = k a
+(Error s)   `bindE` k = Error s
+
+showE :: E Value -> String
+showE (Success a) = "Success: " ++ showval a
+showE (Error s)   = "Error: " ++ s
 
 showval :: Value -> String
-showval Wrong   = "<wrong>"
 showval (Num i) = show i
 showval (Fun f) = "<function>"
 
-lookup :: Name -> Environment -> M Value
-lookup x []        = unitM Wrong
-lookup x ((y,b):e) = if x == y then unitM b else lookup x e
+lookup :: Name -> Environment -> E Value
+lookup x []        = errorE ("unbound variable: " ++ x)
+lookup x ((y,b):e) = if x == y then unitE b else lookup x e
 
-interp :: Term -> Environment -> M Value
+interp :: Term -> Environment -> E Value
 interp (Var x) e  = lookup x e
-interp (Con i) e  = unitM (Num i)
-interp (Add u v) e = interp u e `bindM` (\a ->
-                     interp v e `bindM` (\b ->
+interp (Con i) e  = unitE (Num i)
+interp (Add u v) e = interp u e `bindE` (\a ->
+                     interp v e `bindE` (\b ->
                      add a b))
-interp (Lam x v) e = unitM (Fun (\a -> interp v ((x,a):e)))
-interp (App t u) e = interp t e `bindM` (\f ->
-                     interp u e `bindM` (\a ->
+interp (Lam x v) e = unitE (Fun (\a -> interp v ((x,a):e)))
+interp (App t u) e = interp t e `bindE` (\f ->
+                     interp u e `bindE` (\a ->
                      apply f a))
 
-add :: Value -> Value -> M Value
-add (Num i) (Num j) = unitM (Num (i+j))
-add a b             = unitM Wrong
+add :: Value -> Value -> E Value
+add (Num i) (Num j) = unitE (Num (i+j))
+add a b             = errorE ("should be numbers: " ++ showval a
+                                             ++ "," ++ showval b)
 
-apply :: Value -> Value -> M Value
+apply :: Value -> Value -> E Value
 apply (Fun k) a = k a
-apply f a       = unitM Wrong
+apply f a       = errorE ("should be function: " ++ showval f) 
 
 test :: Term -> String
-test t = showM (interp t [])
+test t = showE (interp t [])
 
 term0 = (App (Lam "x" (Add (Var "x") (Var "x")))
              (Add (Con 10) (Con 11)))
+
+term1 = (App (Con 1) (Con 2))
