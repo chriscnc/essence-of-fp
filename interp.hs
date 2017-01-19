@@ -2,12 +2,14 @@ module Interp where
 import Prelude hiding (lookup)
 
 type Name = String
+type Position = Int
 
 data Term = Var Name
           | Con Int
           | Add Term Term
           | Lam Name Term
           | App Term Term
+          | At Position Term
 
 data Value = Num Int
            | Fun (Value -> E Value)
@@ -29,6 +31,14 @@ bindE :: E a -> (a -> E b) -> E b
 showE :: E Value -> String
 showE (Success a) = "Success: " ++ showval a
 showE (Error s)   = "Error: " ++ s
+
+type P a = Position -> E a
+
+unitP a = \p -> unitE a
+errorP s = \p -> errorE (show p ++ ": " ++ s)
+m `bindP` k = \p -> m p `bindE` (\x -> k x p)
+showP m = showE (m pos0)
+
 
 showval :: Value -> String
 showval (Num i) = show i
